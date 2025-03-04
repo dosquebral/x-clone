@@ -105,9 +105,11 @@ export const likeUnlikePost = async (req, res) => {
 
         if(userLikedPost) {
             await Post.updateOne({_id:postId}, {$pull: {likes: userId}});
+            await User.updateOne({_id:postId}, {$pull: {likedPosts: userId}});
             return res.status(200).json({message: "Post unliked successfully"});
         }else {
             post.likes.push(userId);
+            await User.updateOne({_id:postId}, {$pull: {likedPosts: userId}}); 
             await post.save();
         }
 
@@ -125,3 +127,50 @@ export const likeUnlikePost = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 }
+
+export const getAllPosts = async (req, res) => {
+    try {
+        // getting newest post through sort
+        const posts = await Post.find().sort({createAt: -1}).populate({
+            path: 'user',
+            select: '-password',
+        })
+        .populate({
+            path: 'comments.user',
+            select: '-password',
+        });
+
+        if(posts === 0) {
+            return res.status(200).json([]);
+        }
+
+        res.status(200).json(posts);
+    } catch (error) {
+        console.log("Error in getAllPosts controller : ", error.message);
+        res.status(500).json({ error: error.message });
+    }
+}
+
+export const getLikedPosts = async (req, res) => {
+	const userId = req.params.id;
+
+	try {
+		const user = await User.findById(userId);
+		if (!user) return res.status(404).json({ error: "User not found" });
+
+		const likedPosts = await Post.find({ _id: { $in: user.likedPosts } })
+			.populate({
+				path: "user",
+				select: "-password",
+			})
+			.populate({
+				path: "comments.user",
+				select: "-password",
+			});
+
+		res.status(200).json(likedPosts);
+	} catch (error) {
+		console.log("Error in getLikedPosts controller: ", error);
+		res.status(500).json({ error: "Internal server error" });
+	}
+};
